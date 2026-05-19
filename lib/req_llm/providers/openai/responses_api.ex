@@ -75,6 +75,7 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
     "x_search_call" => :x_search_call
   }
   @assistant_phases ["commentary", "final_answer"]
+  @reasoning_encrypted_content_include ["reasoning.encrypted_content"]
 
   @impl true
   def path, do: "/responses"
@@ -260,10 +261,18 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
       end
 
     meta = Map.merge(meta, extract_assistant_phase_metadata(response_output))
+
+    meta =
+      maybe_put_reasoning_details(meta, extract_reasoning_details_from_segments(response_output))
+
     meta = merge_response_provider_meta(meta, data["response"] || %{})
 
     [ReqLLM.StreamChunk.meta(meta)]
   end
+
+  defp maybe_put_reasoning_details(meta, []), do: meta
+
+  defp maybe_put_reasoning_details(meta, details), do: Map.put(meta, :reasoning_details, details)
 
   # Mirrors the drop-list used by the non-streaming response builder (see
   # `decode_response_body/4` ~line 1546) so streaming and non-streaming
@@ -680,6 +689,7 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
     tool_choice = encode_tool_choice(opts_map[:tool_choice])
     reasoning = encode_reasoning_effort(opts_map[:reasoning_effort])
     service_tier = opts_map[:service_tier] || provider_opts[:service_tier]
+    include = response_include(provider_opts, model_name)
 
     text_format = encode_text_format(provider_opts[:response_format], provider_opts[:verbosity])
 
@@ -701,6 +711,7 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
       |> maybe_put_string("tool_choice", tool_choice)
       |> maybe_put_string("parallel_tool_calls", opts_map[:parallel_tool_calls])
       |> maybe_put_string("service_tier", service_tier)
+      |> maybe_put_string("include", include)
       |> maybe_put_string("text", text_format)
 
     body =
@@ -721,6 +732,19 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
 
   defp default_store(model_name) do
     !ReqLLM.Providers.OpenAI.AdapterHelpers.codex_model?(model_name)
+  end
+
+  defp response_include(provider_opts, model_name) do
+    cond do
+      Keyword.has_key?(provider_opts, :include) ->
+        provider_opts[:include]
+
+      ReqLLM.Providers.OpenAI.AdapterHelpers.reasoning_model?(model_name) ->
+        @reasoning_encrypted_content_include
+
+      true ->
+        nil
+    end
   end
 
   defp encode_tool_message_inline(%ReqLLM.Message{role: :tool} = msg) do
