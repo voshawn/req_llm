@@ -964,6 +964,10 @@ defmodule ReqLLM.Providers.Google do
       |> maybe_put_google_aspect_ratio(request.options[:aspect_ratio])
       |> maybe_put_google_response_modalities(request.options[:response_modalities])
       |> maybe_put(:candidateCount, image_candidate_count(request.options))
+      |> maybe_add_thinking_config(
+        request.options[:google_thinking_budget],
+        request.options[:google_thinking_level]
+      )
 
     generation_config = if generation_config != %{}, do: generation_config
 
