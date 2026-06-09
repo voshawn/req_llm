@@ -2904,7 +2904,7 @@ defmodule ReqLLM.Providers.Google do
     case depth - 1 do
       0 ->
         length = offset + 1
-        <<json::binary-size(length), remaining::binary>> = original
+        <<json::binary-size(^length), remaining::binary>> = original
         {:ok, json, remaining}
 
       next_depth when next_depth > 0 ->
